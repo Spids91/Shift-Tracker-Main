@@ -16,6 +16,7 @@
     --hi:#0E506B;--hi-soft:#eaf3f8;            /* subsistence / confirmed → Suez blue */
     --warn:#b06a00;--warn-soft:#f7eede;        /* overtime / not-logged amber, AA on white */
     --ask:#216082;--ask-soft:#e7f0f6;          /* prompts */
+    --ok:#1f7a55;--ok-soft:#e4f2ea;            /* logged / done → green, AA on white and reads on night */
     --bad:#b03a3a;
     /* day/night shift identity, expressed in the Suez ramp */
     --day:#90C3EF;--day-ink:#022226;--day-soft:#e8f2fb;     /* light Suez = day */
@@ -137,7 +138,7 @@
   .callegend{display:flex;flex-wrap:wrap;gap:14px;font-size:11.5px;color:var(--ink-soft);margin-top:18px;justify-content:center}
   .callegend span{display:flex;align-items:center;gap:5px}
   .callegend .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
-  .dot.day{background:var(--day)}.dot.night{background:var(--night)}.dot.logged{background:var(--p-600)}.dot.notlogged{background:var(--warn)}
+  .dot.day{background:var(--day)}.dot.night{background:var(--night)}.dot.logged{background:var(--ok);box-shadow:0 0 0 1.5px #fff,0 0 0 2.5px var(--line)}.dot.notlogged{background:var(--warn)}
   .dot.leave-a{background:var(--p-200)}.dot.leave-s{background:#f0e6d6}.dot.exc{background:var(--warn)}
   .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
   .caldow{font-family:var(--sans);font-size:11px;color:var(--p-800);text-align:center;padding-bottom:4px;font-weight:700;letter-spacing:.02em}
@@ -156,8 +157,8 @@
   .calcell.today{box-shadow:inset 0 0 0 2.5px var(--p-500)}
   /* dot top-right so it never blocks the shift time */
   .calcell .cflag{width:6px;height:6px;border-radius:50%;position:absolute;top:5px;right:5px}
-  .calcell .cflag.logged{background:var(--p-600)}
-  .calcell.day .cflag.logged,.calcell.night .cflag.logged{background:#fff}
+  .calcell .cflag.logged{background:var(--ok);box-shadow:0 0 0 1.5px #fff}
+  .calcell.day .cflag.logged,.calcell.night .cflag.logged{background:var(--ok);box-shadow:0 0 0 1.5px #fff}
   .calcell .cflag.notlogged{background:var(--warn)}
   .caldetail{margin-top:14px}
   /* shift pattern manager */
@@ -213,7 +214,7 @@
   .mdt-tips ul{margin:0;padding-left:18px}
   .mdt-tips li{font-size:12.5px;color:var(--ink-soft);line-height:1.6}
   .mdt-progress{background:var(--ok-soft);border:1px solid #bfe2ce;border-radius:11px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--ink)}
-  .calmonthtotal{text-align:center;font-size:13px;color:var(--ink-soft);margin-top:14px}
+  .calmonthtotal{text-align:center;font-size:13px;color:var(--ink-soft);margin-top:14px;line-height:1.8}
   .calmonthtotal b{color:var(--p-700)}
   .pattype{flex:1;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
   .patdel{background:none;border:none;color:var(--bad);font-size:20px;cursor:pointer;line-height:1;padding:0 6px}
@@ -387,7 +388,7 @@
   <section class="panel" data-panel="roster">
     <nav class="subtabs">
       <button class="subtab on" data-sub="view">View roster</button>
-      <button class="subtab" data-sub="edit">Roster</button>
+      <button class="subtab" data-sub="edit">Edit roster</button>
     </nav>
 
     <!-- VIEW: month calendar -->
@@ -1606,7 +1607,7 @@ function renderCalendar(){
   if(!roster.cycle || !roster.anchorDate){
     $('calGrid').innerHTML=''; $('calMonth').textContent='';
     banner.className='banner warn';
-    banner.innerHTML='No roster set yet. Go to <b>Edit cycle</b>, fill in your weeks and anchor date, and save.';
+    banner.innerHTML='No roster set yet. Go to <b>Edit roster</b>, fill in your weeks and anchor date, and save.';
     $('calDetail').innerHTML='';
     return;
   }
@@ -1647,14 +1648,24 @@ function renderCalendar(){
     </div>`;
   }
   $('calGrid').innerHTML=cells;
-  // monthly subsistence money total across saved shifts in this month
-  let monthMoney=0;
+  // monthly totals across saved shifts in this month: overtime (hours then money) + subsistence money
+  let monthMoney=0, monthOtHours=0, monthOtMoney=0;
   Object.keys(shiftStore).forEach(ds=>{
     const dt=new Date(ds+'T00:00:00');
-    if(dt.getFullYear()===y && dt.getMonth()===m) monthMoney+=shiftSubsMoney(shiftStore[ds]);
+    if(dt.getFullYear()===y && dt.getMonth()===m){
+      const s=shiftStore[ds];
+      monthMoney+=shiftSubsMoney(s);
+      monthOtHours+=s.otHours||0;
+      monthOtMoney+=effOtMoney(s);
+    }
   });
   const mt=$('calMonthTotal');
-  if(mt) mt.innerHTML = monthMoney>0 ? `Subsistence this month: <b>${money(monthMoney)}</b>` : '';
+  if(mt){
+    const parts=[];
+    if(monthOtHours>0) parts.push(`Overtime this month: <b>${(+monthOtHours.toFixed(2))}h${monthOtMoney>0?' &middot; '+money(monthOtMoney):''}</b>`);
+    if(monthMoney>0) parts.push(`Subsistence this month: <b>${money(monthMoney)}</b>`);
+    mt.innerHTML = parts.join('<br>');
+  }
   $('calGrid').querySelectorAll('.calcell[data-date]').forEach(c=>c.onclick=()=>showCalDetail(c.dataset.date));
   $('calDetail').innerHTML='';
 }
@@ -1671,7 +1682,7 @@ function showCalDetail(ds){
   if(isLeave) status = rf.pattern==='annual' ? 'Annual leave' : 'Sick leave';
   else if(working) status = `Working ${rf.pattern}`;
   else status = 'Day off';
-  const srcTag = isException ? '<span class="extag">one-off change</span>' : '<span class="cyctag">from cycle</span>';
+  const srcTag = isException ? '<span class="extag">one-off change</span>' : '<span class="cyctag">from roster</span>';
 
   let html=`<div class="card">
     <div class="cd-head"><b>${fmtDate(ds)}</b>${srcTag}</div>
@@ -1690,7 +1701,7 @@ function showCalDetail(ds){
       <button class="cd-opt" data-ex="off" data-ds="${ds}">Day off</button>
       <button class="cd-opt" data-ex="annual" data-ds="${ds}">Annual leave</button>
       <button class="cd-opt" data-ex="sick" data-ds="${ds}">Sick leave</button>
-      ${isException?`<button class="cd-opt clear" data-ex="clear" data-ds="${ds}">Reset to cycle</button>`:''}
+      ${isException?`<button class="cd-opt clear" data-ex="clear" data-ds="${ds}">Reset to roster</button>`:''}
     </div>
   </div></div>`;
   $('calDetail').innerHTML=html;
