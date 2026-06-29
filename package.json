@@ -4,7 +4,10 @@
   "description": "Overtime and subsistence tracker for NAS paramedics. Engine-first, portable to native.",
   "private": true,
   "scripts": {
-    "test": "node engine/engine.test.js"
+    "test": "node engine/engine.test.js",
+    "test:fullapp": "node stress-test-fullapp.js",
+    "test:engine": "node engine/engine.test.js",
+    "test:station": "node stress-test-station.js"
   },
   "license": "UNLICENSED"
 }
